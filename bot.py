@@ -4,87 +4,104 @@ import time
 
 TOKEN = "8937129811:AAHmwlXc5iCPOU8K8v3GfeRqbgstQPC5ap4"
 
-# ---------- Temporary storage (Version 0.1) ----------
-study_sessions = {}
-daily_totals = {}
+# -------------------------------
+# Temporary storage (Version 0.1)
+# -------------------------------
+study_sessions = {}   # user_id -> start timestamp
+daily_totals = {}     # user_id -> total seconds studied today
 
-# ---------- Commands ----------
 
+# -------------------------------
+# Helper
+# -------------------------------
+def format_time(seconds):
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
+    return f"{hours}h {minutes}m {secs}s"
+
+
+# -------------------------------
+# Commands
+# -------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Welcome to StudyNest!\n\n"
-        "Commands:\n"
-        "/startstudy - Start studying\n"
-        "/stopstudy - Stop studying\n"
-        "/today - Show today's study time"
+        "Available commands:\n\n"
+        "📚 /startstudy - Start studying\n"
+        "🛑 /stopstudy - Stop studying\n"
+        "📅 /today - Today's study time"
     )
+
 
 async def startstudy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if user_id in study_sessions:
-        await update.message.reply_text("📚 You're already studying!")
+        await update.message.reply_text(
+            "📚 You're already studying!"
+        )
         return
 
     study_sessions[user_id] = time.time()
 
     await update.message.reply_text(
-        "📚 Study session started!\n\n"
+        "✅ Study session started!\n\n"
         "Good luck! 🍀"
     )
+
 
 async def stopstudy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     if user_id not in study_sessions:
         await update.message.reply_text(
-            "❌ You haven't started a study session.\nUse /startstudy first."
+            "❌ You haven't started studying.\nUse /startstudy first."
         )
         return
 
-    start_time = study_sessions.pop(user_id)
-    seconds = int(time.time() - start_time)
+    elapsed = int(time.time() - study_sessions.pop(user_id))
 
-    daily_totals[user_id] = daily_totals.get(user_id, 0) + seconds
-
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
-
-    total = daily_totals[user_id]
-    total_hours = total // 3600
-    total_minutes = (total % 3600) // 60
+    daily_totals[user_id] = daily_totals.get(user_id, 0) + elapsed
 
     await update.message.reply_text(
         f"✅ Study session finished!\n\n"
-        f"⏱️ Session: {hours}h {minutes}m\n"
-        f"📅 Today: {total_hours}h {total_minutes}m"
+        f"⏱ Session: {format_time(elapsed)}\n"
+        f"📅 Today: {format_time(daily_totals[user_id])}"
     )
+
 
 async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     total = daily_totals.get(user_id, 0)
 
-    hours = total // 3600
-    minutes = (total % 3600) // 60
+    message = ""
 
-    await update.message.reply_text(
-        f"📅 Today's study time:\n\n"
-        f"{hours}h {minutes}m"
-    )
+    if user_id in study_sessions:
+        current_session = int(time.time() - study_sessions[user_id])
+        total += current_session
 
-# ---------- Build Bot ----------
-app = (
-    Application.builder()
-    .token(TOKEN)
-    .build()
-)
+        message += (
+            "📚 You are currently studying.\n\n"
+            f"Current session: {format_time(current_session)}\n\n"
+        )
+
+    message += f"📅 Today's total:\n{format_time(total)}"
+
+    await update.message.reply_text(message)
+
+
+# -------------------------------
+# Bot
+# -------------------------------
+app = Application.builder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("startstudy", startstudy))
 app.add_handler(CommandHandler("stopstudy", stopstudy))
 app.add_handler(CommandHandler("today", today))
 
-print("🤖 StudyNest Version 0.1 is running...")
+print("🤖 StudyNest v0.1 running...")
 
 app.run_polling()
