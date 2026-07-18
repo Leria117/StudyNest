@@ -2,7 +2,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import time
 
-TOKEN = "PASTE_YOUR_NEW_TOKEN_HERE"
+TOKEN = "8937129811:AAHmwlXc5iCPOU8K8v3GfeRqbgstQPC5ap4"
 
 # ---------- Temporary storage (Version 0.1) ----------
 study_sessions = {}
