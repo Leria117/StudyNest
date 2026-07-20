@@ -9,7 +9,7 @@ from telegram.ext import (
 import time
 from datetime import date
 
-TOKEN = "8937129811:AAHmwlXc5iCPOU8K8v3GfeRqbgstQPC5ap4"
+TOKEN = "8938265313:AAFtburkXui1aofoeoLJ1kUmBuZVzoFfHMI"
 
 # -------------------------------
 # Temporary storage (Version 0.4 Beta)
