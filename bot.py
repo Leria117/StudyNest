@@ -1,16 +1,25 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 import time
 from datetime import date
 
 TOKEN = "8937129811:AAHmwlXc5iCPOU8K8v3GfeRqbgstQPC5ap4"
 
 # -------------------------------
-# Temporary storage (Version 0.3)
+# Temporary storage (Version 0.4 Beta)
 # -------------------------------
-study_sessions = {}   # user_id -> start timestamp
-daily_totals = {}     # user_id -> {"date": "YYYY-MM-DD", "seconds": total}
 
+study_sessions = {}      # user_id -> start timestamp
+daily_totals = {}        # user_id -> {"date": ..., "seconds": ...}
+
+waiting_users = []       # Users waiting for a partner
+partners = {}            # user_id -> partner_id
 
 # -------------------------------
 # Helper
@@ -40,21 +49,27 @@ def get_today_record(user_id):
 
     return daily_totals[user_id]
 
+def get_keyboard():
+    keyboard = [
+        ["📚 Start Studying", "🛑 Stop Studying"],
+        ["📅 Today", "🤝 Study Buddy"],
+        ["🗑 Reset"]
+    ]
 
+    return ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True
+    )
 # -------------------------------
 # Commands
 # -------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Welcome to StudyNest!\n\n"
-        "Available commands:\n\n"
-        "📚 /startstudy - Start studying\n"
-        "🛑 /stopstudy - Stop studying\n"
-        "📅 /today - Today's study time\n"
-        "🗑 /reset - Reset today's study time"
+        "Choose an option below! 👇",
+        reply_markup=get_keyboard()
     )
-
-
+        
 async def startstudy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
@@ -73,6 +88,18 @@ async def startstudy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✅ Study session started!\n\n"
         "Good luck! 🍀"
     )
+
+    # Notify partner if they have one
+    if user_id in partners:
+        partner_id = partners[user_id]
+
+        try:
+            await context.bot.send_message(
+                chat_id=partner_id,
+                text="🟢 Your study buddy has started studying!\n\nGood luck to both of you! 📚"
+            )
+        except:
+            pass
 
 
 async def stopstudy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -96,7 +123,23 @@ async def stopstudy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📅 Today: {format_time(record['seconds'])}"
     )
 
+    # Notify partner
+    if user_id in partners:
+        partner_id = partners[user_id]
 
+        try:
+            await context.bot.send_message(
+                chat_id=partner_id,
+                text=(
+                    "📚 Your study buddy finished a study session!\n\n"
+                    f"⏱ Session: {format_time(elapsed)}\n"
+                    f"📅 Today's total: {format_time(record['seconds'])}"
+                )
+            )
+        except:
+            pass
+
+  
 async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
@@ -134,7 +177,48 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📅 Today: 0h 0m 0s"
     )
 
+async def studybuddy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
 
+    # Already has a partner
+    if user_id in partners:
+        await update.message.reply_text(
+            "🤝 You already have a study buddy!\n\n"
+            "Use /skip if you want a different partner."
+        )
+        return
+
+    # Already waiting
+    if user_id in waiting_users:
+        await update.message.reply_text(
+            "🔍 You're already waiting for a study buddy..."
+        )
+        return
+
+    # Someone is waiting
+    if waiting_users:
+        partner_id = waiting_users.pop(0)
+
+        partners[user_id] = partner_id
+        partners[partner_id] = user_id
+
+        await update.message.reply_text(
+            "🎉 Study buddy found!\n\n"
+            "Good luck studying together! 📚"
+        )
+
+        await context.bot.send_message(
+            chat_id=partner_id,
+            text="🎉 Study buddy found!\n\nGood luck studying together! 📚"
+        )
+
+    else:
+        waiting_users.append(user_id)
+
+        await update.message.reply_text(
+            "🔍 Looking for a study buddy...\n\n"
+            "You'll be notified when someone joins!"
+        )
 # -------------------------------
 # Bot
 # -------------------------------
@@ -145,7 +229,42 @@ app.add_handler(CommandHandler("startstudy", startstudy))
 app.add_handler(CommandHandler("stopstudy", stopstudy))
 app.add_handler(CommandHandler("today", today))
 app.add_handler(CommandHandler("reset", reset))
+app.add_handler(CommandHandler("studybuddy", studybuddy))
 
-print("🤖 StudyNest v0.3 running...")
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
+    if text == "📚 Start Studying":
+        await startstudy(update, context)
+
+    elif text == "🛑 Stop Studying":
+        await stopstudy(update, context)
+
+    elif text == "📅 Today":
+        await today(update, context)
+
+    elif text == "🤝 Study Buddy":
+        await studybuddy(update, context)
+
+    elif text == "🗑 Reset":
+        await reset(update, context)
+# -------------------------------
+# Bot
+# -------------------------------
+
+app = Application.builder().token(TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("startstudy", startstudy))
+app.add_handler(CommandHandler("stopstudy", stopstudy))
+app.add_handler(CommandHandler("today", today))
+app.add_handler(CommandHandler("reset", reset))
+app.add_handler(CommandHandler("studybuddy", studybuddy))
+
+app.add_handler(
+    MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler)
+)
+
+print("🤖 StudyNest v0.4 Beta running...")
 
 app.run_polling()
