@@ -6,7 +6,7 @@ from datetime import date
 TOKEN = "8937129811:AAHmwlXc5iCPOU8K8v3GfeRqbgstQPC5ap4"
 
 # -------------------------------
-# Temporary storage (Version 0.2)
+# Temporary storage (Version 0.3)
 # -------------------------------
 study_sessions = {}   # user_id -> start timestamp
 daily_totals = {}     # user_id -> {"date": "YYYY-MM-DD", "seconds": total}
@@ -50,7 +50,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Available commands:\n\n"
         "📚 /startstudy - Start studying\n"
         "🛑 /stopstudy - Stop studying\n"
-        "📅 /today - Today's study time"
+        "📅 /today - Today's study time\n"
+        "🗑 /reset - Reset today's study time"
     )
 
 
@@ -119,6 +120,21 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message)
 
 
+async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    record = get_today_record(user_id)
+    record["seconds"] = 0
+
+    if user_id in study_sessions:
+        study_sessions.pop(user_id)
+
+    await update.message.reply_text(
+        "🗑 Today's study time has been reset.\n\n"
+        "📅 Today: 0h 0m 0s"
+    )
+
+
 # -------------------------------
 # Bot
 # -------------------------------
@@ -128,7 +144,8 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("startstudy", startstudy))
 app.add_handler(CommandHandler("stopstudy", stopstudy))
 app.add_handler(CommandHandler("today", today))
+app.add_handler(CommandHandler("reset", reset))
 
-print("🤖 StudyNest v0.2 running...")
+print("🤖 StudyNest v0.3 running...")
 
 app.run_polling()
