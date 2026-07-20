@@ -1,14 +1,15 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import time
+from datetime import date
 
 TOKEN = "8937129811:AAHmwlXc5iCPOU8K8v3GfeRqbgstQPC5ap4"
 
 # -------------------------------
-# Temporary storage (Version 0.1)
+# Temporary storage (Version 0.2)
 # -------------------------------
 study_sessions = {}   # user_id -> start timestamp
-daily_totals = {}     # user_id -> total seconds studied today
+daily_totals = {}     # user_id -> {"date": "YYYY-MM-DD", "seconds": total}
 
 
 # -------------------------------
@@ -19,6 +20,25 @@ def format_time(seconds):
     minutes = (seconds % 3600) // 60
     secs = seconds % 60
     return f"{hours}h {minutes}m {secs}s"
+
+
+def get_today_record(user_id):
+    """Returns today's record, resetting it automatically if the date changed."""
+    today = str(date.today())
+
+    if user_id not in daily_totals:
+        daily_totals[user_id] = {
+            "date": today,
+            "seconds": 0
+        }
+
+    elif daily_totals[user_id]["date"] != today:
+        daily_totals[user_id] = {
+            "date": today,
+            "seconds": 0
+        }
+
+    return daily_totals[user_id]
 
 
 # -------------------------------
@@ -36,6 +56,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def startstudy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+
+    # Make sure today's record exists
+    get_today_record(user_id)
 
     if user_id in study_sessions:
         await update.message.reply_text(
@@ -60,21 +83,25 @@ async def stopstudy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    record = get_today_record(user_id)
+
     elapsed = int(time.time() - study_sessions.pop(user_id))
 
-    daily_totals[user_id] = daily_totals.get(user_id, 0) + elapsed
+    record["seconds"] += elapsed
 
     await update.message.reply_text(
         f"✅ Study session finished!\n\n"
         f"⏱ Session: {format_time(elapsed)}\n"
-        f"📅 Today: {format_time(daily_totals[user_id])}"
+        f"📅 Today: {format_time(record['seconds'])}"
     )
 
 
 async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    total = daily_totals.get(user_id, 0)
+    record = get_today_record(user_id)
+
+    total = record["seconds"]
 
     message = ""
 
@@ -102,6 +129,6 @@ app.add_handler(CommandHandler("startstudy", startstudy))
 app.add_handler(CommandHandler("stopstudy", stopstudy))
 app.add_handler(CommandHandler("today", today))
 
-print("🤖 StudyNest v0.1 running...")
+print("🤖 StudyNest v0.2 running...")
 
 app.run_polling()
